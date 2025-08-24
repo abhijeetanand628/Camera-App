@@ -7,11 +7,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export default function CameraTab() {
     const [facing, setFacing] = useState<"back" | "front">("back"); // Tells which camera is active. It is initially set to BACK.
     const [zoom, setZoom] = useState(0);
-    const [capturedphotos, setCapturedPhotos] = useState<Array<{uri: string}>>(
+    const [capturedPhotos, setCapturedPhotos] = useState<Array<{uri: string}>>(
         [] // This Array stores the URI's of the photos we take.
     );
     const [permission, requestPermission] = useCameraPermissions(); // useCameraPermissions() is an Expo hook that returns permission state
-    const [isBarCode, setIsBarCode] = useState(false);
+    const [isBarcodeMode, setIsBarcodeMode] = useState(false);
     const [barCodeResult, setBarCodeResult] = useState<string | null>(null);
     const cameraRef = useRef<CameraView>(null); // It allows us to directly interact with our camera.
 
@@ -43,7 +43,7 @@ export default function CameraTab() {
                 console.error("Failed to Save Photo", error);
             }
         },
-        [capturedphotos]
+        [capturedPhotos]
     );
 
     const toggleCameraFacing = useCallback(() => {
@@ -61,12 +61,12 @@ export default function CameraTab() {
                 base64: false,
                 exif: false,
             });
-            await savePhoto({uri: photo.uri});
+            await savePhotos({uri: photo.uri});
         }
-    }, [savePhoto]);
+    }, [savePhotos]);
 
     const toggleBarcodeMode = useCallback(() => {
-        setIsBarCode((prev) => !prev);
+        setIsBarcodeMode((prev) => !prev);
     }, []);
 
     const handleBarCodeScanned = useCallback(
@@ -78,14 +78,14 @@ export default function CameraTab() {
             return <View />;
         }
 
-        if(permission.granted) {
+        if(!permission.granted) {
             return (
-                <View style={StyleSheet.container}>
+                <View style={styles.container}>
                     <Text style={styles.text}>
                         We need to your permission to show the camera
                     </Text>
                     <TouchableOpacity style={styles.button} onPress={requestPermission}>
-                        <Text style={StyleSheet.buttonText}>Grant Permission</Text>
+                        <Text style={styles.buttonText}>Grant Permission</Text>
                     </TouchableOpacity>
                 </View>
             )
@@ -95,11 +95,11 @@ export default function CameraTab() {
             <View style={styles.container}>
                 <CameraView
                     ref={cameraRef}
-                    styles={styles.camera}
+                    style={styles.camera}
                     facing={facing}
                     zoom={zoom}
                     barcodeScannerSettings={{
-                        barCodeTypes: [
+                        barcodeTypes: [
                             "qr",
                             "ean13",
                             "ean8",
@@ -118,7 +118,7 @@ export default function CameraTab() {
                             >
                                 <Text style={styles.buttonText}>Flip</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={StyleSheet.button} onPress={toggleBarcodeMode}>
+                            <TouchableOpacity style={styles.button} onPress={toggleBarcodeMode}>
                                 <Text style={styles.buttonText}>
                                     {isBarcodeMode ? "Photo Mode" : "Barcode Mode"} 
                                 </Text>
@@ -134,11 +134,11 @@ export default function CameraTab() {
                                 onValueChange={handleZoomChange}
                             />
                         </View>
-                        {!BarcodeMode && (
+                        {!isBarcodeMode && (
                             <View style={styles.row}>
                                 <TouchableOpacity 
                                     style={styles.captureButton}
-                                    onPress={takePictre}
+                                    onPress={takePicture}
                                 >
                                     <Text style={styles.captureButtonText}>Take Photo</Text>
                                 </TouchableOpacity>
@@ -165,3 +165,86 @@ export default function CameraTab() {
                 </Modal> 
             </View>
         )
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: "#000"
+    },
+    camera: {
+        flex: 1,
+    },
+    controlContainer: {
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 20,
+        backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: "space-around",
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    button: {
+        backgroundColor: "#fff",
+        padding: 10,
+        borderRadius: 5,
+    },
+    buttonText: {
+        color: "#000",
+        fontSize: 16,
+    },
+    text: {
+        color: "#fff",
+        marginLeft: 10,
+    },
+    slider: {
+        flex: 1,
+        marginLeft: 10,
+    },
+    captureButton: {
+        backgroundColor: "#fff",
+        paddingVertical: 15,
+        paddingHorizontal: 30,
+        borderRadius: 30,
+    },
+    captureButtonText: {
+        color: "#000",
+        fontSize: 18,
+        fontWeight: "bold",
+    },
+    modalView: {
+        margin: 20,
+        backgroundColor: "white",
+        borderRadius: 20,
+        padding: 35,
+        alignItems: "center",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    modalText: {
+        marginBottom: 15,
+        textAlign: "center",
+        fontSize: 18,
+        fontWeight: "bold",
+    },
+    barcodeText: {
+        marginBottom: 15,
+        textAlign: "center",
+        fontSize: 16,
+    },
+    buttonClose: {
+        backgroundColor: "#2196F3",
+        marginTop: 10,
+    },
+});
