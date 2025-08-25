@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal} from 'react-native';
 import { CameraView, useCameraPermissions, CameraCapturedPicture, BarcodeScanningResult } from "expo-camera";
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signOut } from "firebase/auth";
+import { auth } from "../../firebaseConfig";
+
 
 export default function CameraTab() {
     const [facing, setFacing] = useState<"back" | "front">("back"); // Tells which camera is active. It is initially set to BACK.
@@ -112,6 +115,12 @@ export default function CameraTab() {
                 >
                     <View style={styles.controlContainer}>
                         <View style={styles.row}>
+                            <TouchableOpacity
+                                style={styles.button}
+                                onPress={() => signOut(auth)}
+                            >
+                                <Text style={styles.buttonText}>Logout</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.button}
                                 onPress={toggleCameraFacing}
