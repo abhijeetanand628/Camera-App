@@ -5,9 +5,11 @@ import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebaseConfig";
-
+import { useRouter } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function CameraTab() {
+    const router = useRouter();
     const [facing, setFacing] = useState<"back" | "front">("back"); // Tells which camera is active. It is initially set to BACK.
     const [zoom, setZoom] = useState(0);
     const [capturedPhotos, setCapturedPhotos] = useState<Array<{uri: string}>>(
@@ -19,8 +21,15 @@ export default function CameraTab() {
     const cameraRef = useRef<CameraView>(null); // It allows us to directly interact with our camera.
 
     useEffect(() => {
-        loadSavedPhotos();
-    }, []);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // User is not logged in, redirect to login screen
+        router.replace("/auth/login"); // make sure this matches your login route
+      }
+    });
+
+    return () => unsubscribe(); // clean up listener
+  }, []);
 
     const loadSavedPhotos = useCallback(async() => {
         try {
@@ -33,21 +42,24 @@ export default function CameraTab() {
         }
     }, []);
 
-    const savePhotos = useCallback(
-        async (newPhoto: {uri: string}) =>{
-            try {
-                const updatedPhotos = [newPhoto, ...capturedPhotos];
-                await AsyncStorage.setItem(
-                    "capturedPhotos",
-                    JSON.stringify(updatedPhotos)
-                );
-                setCapturedPhotos(updatedPhotos);
-            } catch(error) {
-                console.error("Failed to Save Photo", error);
-            }
-        },
-        [capturedPhotos]
-    );
+    const savePhotos = async (newPhoto: {uri: string}) => {
+    setCapturedPhotos(prev => {
+    const updated = [newPhoto, ...prev];
+    AsyncStorage.setItem("capturedPhotos", JSON.stringify(updated));
+    return updated;
+  });
+};
+
+    const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      console.log("Logged out successfully");
+      // If using React Navigation:
+      // navigation.replace("Login");
+    } catch (error) {
+      console.error("Logout failed: ", error);
+    }
+  };
 
     const toggleCameraFacing = useCallback(() => {
         setFacing((current) => (current === "back" ? "front" : "back"));
@@ -57,16 +69,22 @@ export default function CameraTab() {
         setZoom(value);
     }, []);
 
-    const takePicture = useCallback(async () => {
-        if(cameraRef.current) {
+    const takePicture = async () => {
+    if (cameraRef.current) {
+        try {
             const photo = await cameraRef.current.takePictureAsync({
-                quality: 1,
-                base64: false,
-                exif: false,
-            });
-            await savePhotos({uri: photo.uri});
+            quality: 1,
+            base64: false,
+            exif: false,
+        });
+        const newPhoto = { uri: photo.uri + "?t=" + Date.now() }; // ensure unique URI
+        await savePhotos(newPhoto);
+        } catch (err) {
+        console.error("Failed to take photo", err);
         }
-    }, [savePhotos]);
+    }
+    };
+
 
     const toggleBarcodeMode = useCallback(() => {
         setIsBarcodeMode((prev) => !prev);
@@ -117,7 +135,7 @@ export default function CameraTab() {
                         <View style={styles.row}>
                             <TouchableOpacity
                                 style={styles.button}
-                                onPress={() => signOut(auth)}
+                                onPress={handleLogout} 
                             >
                                 <Text style={styles.buttonText}>Logout</Text>
                             </TouchableOpacity>

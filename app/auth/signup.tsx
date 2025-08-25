@@ -35,14 +35,25 @@ export default function SignupScreen() {
         style={styles.input}
       />
       <Button title="Sign Up" onPress={handleSignup} />
-      <Button title="Go to Login" onPress={() => router.push("/auth/login")} />
+
+      <View style={{ marginTop: 15 }}>
+        <Button title="Go to Login" onPress={() => router.push("/auth/login")} />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20 },
-  title: { fontSize: 24, marginBottom: 20, textAlign: "center" },
+  container: { 
+    flex: 1, 
+    justifyContent: "center", 
+    padding: 20 
+  },
+  title: { 
+    fontSize: 24,
+    marginBottom: 20, 
+    textAlign: "center" 
+  },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
