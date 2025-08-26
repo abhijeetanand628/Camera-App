@@ -87,8 +87,9 @@ export default function CameraTab() {
   };
 
     const toggleCameraFacing = useCallback(() => {
+        if (isRecording) return; // prevent flipping during recording
         setFacing((current) => (current === "back" ? "front" : "back"));
-    }, []);
+    }, [isRecording]);
 
     const handleZoomChange = useCallback((value: number) => {
         setZoom(value);
@@ -224,12 +225,13 @@ export default function CameraTab() {
                             <Text style={styles.buttonText}>Logout</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={styles.button}
+                            style={[styles.button, isRecording && styles.buttonDisabled]}
                             onPress={toggleCameraFacing}
+                            disabled={isRecording}
                         >
                             <Text style={styles.buttonText}>Flip</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.button} onPress={toggleBarcodeMode}>
+                        <TouchableOpacity style={[styles.button, isRecording && styles.buttonDisabled]} onPress={!isRecording ? toggleBarcodeMode : undefined} disabled={isRecording}>
                             <Text style={styles.buttonText}>
                                 {isBarcodeMode ? "Photo Mode" : "Barcode Mode"} 
                             </Text>
@@ -320,6 +322,9 @@ const styles = StyleSheet.create({
     buttonText: {
         color: "#000",
         fontSize: 16,
+    },
+    buttonDisabled: {
+        opacity: 0.5,
     },
     text: {
         color: "#fff",

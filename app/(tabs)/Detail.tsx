@@ -17,6 +17,8 @@ export default function Detail() {
     const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null); // This state shows the selected photo which will be shown in full screen mode when chosen.
     const player = useVideoPlayer({ uri: "" });
     const navigation = useNavigation();
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedUris, setSelectedUris] = useState<Set<string>>(new Set());
 
     const loadSavedPhotos = useCallback(async () => {
         try {
@@ -56,6 +58,10 @@ export default function Detail() {
     }, [selectedPhoto]);
 
     const openPhoto = (item: PhotoItem) => {
+        if (selectionMode) {
+            toggleSelect(item.uri);
+            return;
+        }
         setSelectedPhoto(item);
     };
 
@@ -63,16 +69,32 @@ export default function Detail() {
         setSelectedPhoto(null);
     };
 
-    const renderItem = ({item} : {item: PhotoItem }) => (
-        <TouchableOpacity style={styles.item} onPress={() => openPhoto(item)}>
-            <Image source={{ uri: item.uri }} style = {styles.photo} />
-            {item.type === "video" && (
-                <View style={styles.overlay}>
-                    <Text style={styles.playIcon}>▶</Text>
-                </View>
-            )}
-        </TouchableOpacity>
-    );
+    const toggleSelect = (uri: string) => {
+        setSelectedUris(prev => {
+            const next = new Set(prev);
+            if (next.has(uri)) next.delete(uri); else next.add(uri);
+            return next;
+        });
+    };
+
+    const renderItem = ({item} : {item: PhotoItem }) => {
+        const isChecked = selectedUris.has(item.uri);
+        return (
+            <TouchableOpacity style={styles.item} onPress={() => openPhoto(item)} onLongPress={() => setSelectionMode(true)}>
+                <Image source={{ uri: item.uri }} style = {styles.photo} />
+                {item.type === "video" && (
+                    <View style={styles.overlay}>
+                        <Text style={styles.playIcon}>▶</Text>
+                    </View>
+                )}
+                {selectionMode && (
+                    <View style={[styles.checkCircle, isChecked && styles.checkCircleChecked]}>
+                        {isChecked && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                )}
+            </TouchableOpacity>
+        );
+    };
 
     const deleteItem = async (uri: string) => {
         try {
@@ -117,8 +139,37 @@ export default function Detail() {
         </Modal>
     );
 
+    const deleteSelected = async () => {
+        try {
+            const remaining = capturedPhotos.filter(p => !selectedUris.has(p.uri));
+            setCapturedPhotos(remaining);
+            setSelectedUris(new Set());
+            setSelectionMode(false);
+            await AsyncStorage.setItem("capturedPhotos", JSON.stringify(remaining));
+        } catch (e) {
+            console.error("Failed to delete selected", e);
+        }
+    };
+
     return (
         <View style={styles.container}>
+            <View style={styles.toolbar}>
+                <TouchableOpacity style={styles.toolbarButton} onPress={() => {
+                    if (selectionMode) {
+                        setSelectionMode(false);
+                        setSelectedUris(new Set());
+                    } else {
+                        setSelectionMode(true);
+                    }
+                }}>
+                    <Text style={styles.toolbarButtonText}>{selectionMode ? "Cancel" : "Select"}</Text>
+                </TouchableOpacity>
+                {selectionMode && (
+                    <TouchableOpacity style={[styles.toolbarButton, styles.deleteSelected]} onPress={deleteSelected}>
+                        <Text style={[styles.toolbarButtonText, styles.deleteSelectedText]}>Delete Selected ({selectedUris.size})</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
             {capturedPhotos.length > 0 ? (
                 <FlatList
                     data={capturedPhotos}
@@ -148,6 +199,31 @@ const styles = StyleSheet.create({
         width: "100%",
         height: "100%",
     },
+    toolbar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        backgroundColor: '#fff',
+    },
+    toolbarButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: '#eee',
+        borderRadius: 6,
+    },
+    toolbarButtonText: {
+        color: '#000',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    deleteSelected: {
+        backgroundColor: '#ffebee',
+    },
+    deleteSelectedText: {
+        color: '#d32f2f',
+    },
     overlay: {
         position: "absolute",
         top: 0,
@@ -165,6 +241,28 @@ const styles = StyleSheet.create({
         textShadowColor: "rgba(0,0,0,0.6)",
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 2,
+    },
+    checkCircle: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#fff',
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    checkCircleChecked: {
+        backgroundColor: '#2e7d32',
+        borderColor: '#2e7d32',
+    },
+    checkMark: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     noPhotosText: {
         fontSize: 18,
