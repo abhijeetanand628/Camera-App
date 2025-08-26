@@ -66,6 +66,11 @@ export default function Detail() {
     const renderItem = ({item} : {item: PhotoItem }) => (
         <TouchableOpacity style={styles.item} onPress={() => openPhoto(item)}>
             <Image source={{ uri: item.uri }} style = {styles.photo} />
+            {item.type === "video" && (
+                <View style={styles.overlay}>
+                    <Text style={styles.playIcon}>▶</Text>
+                </View>
+            )}
         </TouchableOpacity>
     );
 
@@ -142,6 +147,24 @@ const styles = StyleSheet.create({
     photo: {
         width: "100%",
         height: "100%",
+    },
+    overlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.15)",
+    },
+    playIcon: {
+        color: "#fff",
+        fontSize: 28,
+        fontWeight: "bold",
+        textShadowColor: "rgba(0,0,0,0.6)",
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
     noPhotosText: {
         fontSize: 18,
