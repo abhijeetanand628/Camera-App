@@ -5,7 +5,8 @@
     "scheme": "myCameraApp",
     "plugins": [
       "expo-router",
-      "expo-camera"
+      "expo-camera",
+      "expo-video"
     ],
     "version": "1.0.0",
     "orientation": "portrait",

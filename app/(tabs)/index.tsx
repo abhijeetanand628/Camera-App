@@ -1,24 +1,39 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Modal} from 'react-native';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from "expo-camera";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { CameraView, useCameraPermissions, useMicrophonePermissions, BarcodeScanningResult } from "expo-camera";
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebaseConfig";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
+import { useIsFocused, useFocusEffect } from "@react-navigation/native";
 
 export default function CameraTab() {
     const router = useRouter();
+    const isFocused = useIsFocused();
     const [facing, setFacing] = useState<"back" | "front">("back"); // Tells which camera is active. It is initially set to BACK.
     const [zoom, setZoom] = useState(0);
     const [capturedPhotos, setCapturedPhotos] = useState<Array<{uri: string}>>(
         [] // This Array stores the URI's of the photos we take.
     );
     const [permission, requestPermission] = useCameraPermissions(); // useCameraPermissions() is an Expo hook that returns permission state
+    const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
     const [isBarcodeMode, setIsBarcodeMode] = useState(false);
     const [barCodeResult, setBarCodeResult] = useState<string | null>(null);
     const cameraRef = useRef<CameraView>(null); // It allows us to directly interact with our camera.
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordedUri, setRecordedUri] = useState<string | null>(null);
+    const player = useVideoPlayer({ uri: "" });
+    const [isCameraReady, setIsCameraReady] = useState(false);
+    const [cameraMode, setCameraMode] = useState<"picture" | "video">("picture");
+    useEffect(() => {
+        if (recordedUri) {
+            // @ts-ignore replace is available at runtime in expo-video
+            player.replace({ uri: recordedUri });
+        }
+    }, [recordedUri]);
 
     useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -41,6 +56,16 @@ export default function CameraTab() {
             console.error("Failed to Load Photos", error);
         }
     }, []);
+
+    useEffect(() => {
+        loadSavedPhotos();
+    }, [loadSavedPhotos]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadSavedPhotos();
+        }, [loadSavedPhotos])
+    );
 
     const savePhotos = async (newPhoto: {uri: string}) => {
     setCapturedPhotos(prev => {
@@ -85,6 +110,42 @@ export default function CameraTab() {
     }
     };
 
+    const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    const startRecording = async () => {
+    if (!cameraRef.current || isRecording) return;
+    if (!isCameraReady) {
+        await wait(300);
+        if (!isCameraReady) {
+            console.warn("Camera not ready yet");
+            return;
+        }
+    }
+    try {
+        setIsRecording(true);
+        setCameraMode("video");
+        const video = await (cameraRef.current as any).recordAsync({
+            // omit maxDuration initially for reliability
+            mute: false,
+        });
+        setRecordedUri(video?.uri ?? null);
+    } catch (err) {
+        console.error("Failed to record video", err);
+    } finally {
+        setIsRecording(false);
+        setCameraMode("picture");
+    }
+    };
+
+    const stopRecording = () => {
+    if (!cameraRef.current || !isRecording) return;
+    try {
+        (cameraRef.current as any).stopRecording();
+    } catch (err) {
+        console.error("Failed to stop recording", err);
+    }
+    };
+
 
     const toggleBarcodeMode = useCallback(() => {
         setIsBarcodeMode((prev) => !prev);
@@ -95,18 +156,25 @@ export default function CameraTab() {
             setBarCodeResult(data);
         }, []);
 
-        if(!permission) {
+        if(!permission || !microphonePermission) {
             return <View />;
         }
 
-        if(!permission.granted) {
+        if(!permission.granted || !microphonePermission.granted) {
             return (
                 <View style={styles.container}>
                     <Text style={styles.text}>
-                        We need to your permission to show the camera
+                        We need your camera and microphone permissions to continue
                     </Text>
-                    <TouchableOpacity style={styles.button} onPress={requestPermission}>
-                        <Text style={styles.buttonText}>Grant Permission</Text>
+                    <TouchableOpacity style={styles.button} onPress={async () => {
+                        if(!permission.granted) {
+                            await requestPermission();
+                        }
+                        if(!microphonePermission.granted) {
+                            await requestMicrophonePermission();
+                        }
+                    }}>
+                        <Text style={styles.buttonText}>Grant Permissions</Text>
                     </TouchableOpacity>
                 </View>
             )
@@ -114,54 +182,60 @@ export default function CameraTab() {
 
         return (
             <View style={styles.container}>
-                <CameraView
-                    ref={cameraRef}
-                    style={styles.camera}
-                    facing={facing}
-                    zoom={zoom}
-                    barcodeScannerSettings={{
-                        barcodeTypes: [
-                            "qr",
-                            "ean13",
-                            "ean8",
-                            "pdf417",
-                            "aztec",
-                            "datamatrix",
-                        ],
-                    }}
-                    onBarcodeScanned={isBarcodeMode ? handleBarCodeScanned : undefined}
-                >
-                    <View style={styles.controlContainer}>
-                        <View style={styles.row}>
-                            <TouchableOpacity
-                                style={styles.button}
-                                onPress={handleLogout} 
-                            >
-                                <Text style={styles.buttonText}>Logout</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.button}
-                                onPress={toggleCameraFacing}
-                            >
-                                <Text style={styles.buttonText}>Flip</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.button} onPress={toggleBarcodeMode}>
-                                <Text style={styles.buttonText}>
-                                    {isBarcodeMode ? "Photo Mode" : "Barcode Mode"} 
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.row}>
-                            <Text style={styles.text}>Zoom: {zoom.toFixed(1)}x</Text>
-                            <Slider
-                                style={styles.slider}
-                                minimumValue={0}
-                                maximumValue={1}
-                                value={zoom}
-                                onValueChange={handleZoomChange}
-                            />
-                        </View>
-                        {!isBarcodeMode && (
+                {isFocused && (
+                    <CameraView
+                        ref={cameraRef}
+                        style={styles.camera}
+                        facing={facing}
+                        zoom={zoom}
+                        mode={isBarcodeMode ? "picture" : cameraMode}
+                        {...(cameraMode === "video" ? { videoQuality: "720p" } : {})}
+                        barcodeScannerSettings={{
+                            barcodeTypes: [
+                                "qr",
+                                "ean13",
+                                "ean8",
+                                "pdf417",
+                                "aztec",
+                                "datamatrix",
+                            ],
+                        }}
+                        onBarcodeScanned={isBarcodeMode ? handleBarCodeScanned : undefined}
+                        onCameraReady={() => setIsCameraReady(true)}
+                    />
+                )}
+                <View style={styles.controlContainer} pointerEvents="box-none">
+                    <View style={styles.row}>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={handleLogout} 
+                        >
+                            <Text style={styles.buttonText}>Logout</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={toggleCameraFacing}
+                        >
+                            <Text style={styles.buttonText}>Flip</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.button} onPress={toggleBarcodeMode}>
+                            <Text style={styles.buttonText}>
+                                {isBarcodeMode ? "Photo Mode" : "Barcode Mode"} 
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.row}>
+                        <Text style={styles.text}>Zoom: {zoom.toFixed(1)}x</Text>
+                        <Slider
+                            style={styles.slider}
+                            minimumValue={0}
+                            maximumValue={1}
+                            value={zoom}
+                            onValueChange={handleZoomChange}
+                        />
+                    </View>
+                    {!isBarcodeMode && (
+                        <>
                             <View style={styles.row}>
                                 <TouchableOpacity 
                                     style={styles.captureButton}
@@ -170,9 +244,30 @@ export default function CameraTab() {
                                     <Text style={styles.captureButtonText}>Take Photo</Text>
                                 </TouchableOpacity>
                             </View>
-                        )}
+                            <View style={styles.row}>
+                                <TouchableOpacity 
+                                    style={styles.captureButton}
+                                    onPress={isRecording ? stopRecording : startRecording}
+                                >
+                                    <Text style={styles.captureButtonText}>
+                                        {isRecording ? "Stop Recording" : "Start Recording"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
+                </View>
+                {recordedUri && (
+                    <View style={styles.videoContainer}>
+                        <VideoView
+                            player={player}
+                            style={styles.video}
+                            allowsFullscreen
+                            allowsPictureInPicture
+                            contentFit="contain"
+                        />
                     </View>
-                </CameraView>
+                )}
                 <Modal 
                     animationType="slide"
                     transparent={true}
@@ -273,5 +368,13 @@ const styles = StyleSheet.create({
     buttonClose: {
         backgroundColor: "#2196F3",
         marginTop: 10,
+    },
+    videoContainer: {
+        width: "100%",
+        backgroundColor: "#000",
+    },
+    video: {
+        width: "100%",
+        height: 220,
     },
 });
