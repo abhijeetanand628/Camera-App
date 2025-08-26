@@ -15,7 +15,7 @@ export default function CameraTab() {
     const isFocused = useIsFocused();
     const [facing, setFacing] = useState<"back" | "front">("back"); // Tells which camera is active. It is initially set to BACK.
     const [zoom, setZoom] = useState(0);
-    const [capturedPhotos, setCapturedPhotos] = useState<Array<{uri: string}>>(
+    const [capturedPhotos, setCapturedPhotos] = useState<Array<{uri: string; type?: "photo" | "video"}>>(
         [] // This Array stores the URI's of the photos we take.
     );
     const [permission, requestPermission] = useCameraPermissions(); // useCameraPermissions() is an Expo hook that returns permission state
@@ -67,7 +67,7 @@ export default function CameraTab() {
         }, [loadSavedPhotos])
     );
 
-    const savePhotos = async (newPhoto: {uri: string}) => {
+    const savePhotos = async (newPhoto: {uri: string; type?: "photo" | "video"}) => {
     setCapturedPhotos(prev => {
     const updated = [newPhoto, ...prev];
     AsyncStorage.setItem("capturedPhotos", JSON.stringify(updated));
@@ -102,7 +102,7 @@ export default function CameraTab() {
             base64: false,
             exif: false,
         });
-        const newPhoto = { uri: photo.uri + "?t=" + Date.now() }; // ensure unique URI
+        const newPhoto: { uri: string; type: "photo" | "video" } = { uri: photo.uri + "?t=" + Date.now(), type: "photo" }; // ensure unique URI
         await savePhotos(newPhoto);
         } catch (err) {
         console.error("Failed to take photo", err);
@@ -124,11 +124,22 @@ export default function CameraTab() {
     try {
         setIsRecording(true);
         setCameraMode("video");
+        setIsCameraReady(false);
+        await wait(600);
+        if (!isCameraReady) {
+            // give one more brief moment for mode switch
+            await wait(300);
+        }
         const video = await (cameraRef.current as any).recordAsync({
             // omit maxDuration initially for reliability
             mute: false,
         });
-        setRecordedUri(video?.uri ?? null);
+        if (video?.uri) {
+            const newItem: { uri: string; type: "photo" | "video" } = { uri: video.uri + "?t=" + Date.now(), type: "video" };
+            await savePhotos(newItem);
+        }
+        // Do not preview on Home; Photos tab will show saved media
+        setRecordedUri(null);
     } catch (err) {
         console.error("Failed to record video", err);
     } finally {
@@ -200,7 +211,7 @@ export default function CameraTab() {
                                 "datamatrix",
                             ],
                         }}
-                        onBarcodeScanned={isBarcodeMode ? handleBarCodeScanned : undefined}
+                        onBarcodeScanned={isBarcodeMode && cameraMode === "picture" ? handleBarCodeScanned : undefined}
                         onCameraReady={() => setIsCameraReady(true)}
                     />
                 )}
@@ -257,17 +268,7 @@ export default function CameraTab() {
                         </>
                     )}
                 </View>
-                {recordedUri && (
-                    <View style={styles.videoContainer}>
-                        <VideoView
-                            player={player}
-                            style={styles.video}
-                            allowsFullscreen
-                            allowsPictureInPicture
-                            contentFit="contain"
-                        />
-                    </View>
-                )}
+                {/* No inline video preview; videos are sent to Photos */}
                 <Modal 
                     animationType="slide"
                     transparent={true}

@@ -1,10 +1,12 @@
 import React, {useState, useCallback, useEffect } from 'react';
 import {View, Text, StyleSheet, Image, FlatList, Dimensions, Modal, TouchableOpacity, SafeAreaView } from 'react-native';
+import { VideoView, useVideoPlayer } from "expo-video";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "expo-router";
 
 type PhotoItem = {
     uri: string;
+    type?: "photo" | "video";
 };
 
 const {width, height} = Dimensions.get("window");
@@ -13,6 +15,7 @@ const itemSize = width / 3;
 export default function Detail() {
     const [capturedPhotos, setCapturedPhotos] = useState<PhotoItem[]>([]); // This state holds all captured photos.
     const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null); // This state shows the selected photo which will be shown in full screen mode when chosen.
+    const player = useVideoPlayer({ uri: "" });
     const navigation = useNavigation();
 
     const loadSavedPhotos = useCallback(async () => {
@@ -34,6 +37,24 @@ export default function Detail() {
         return unsubscribe;
     }, [navigation, loadSavedPhotos]);
 
+    useEffect(() => {
+        (async () => {
+            if (selectedPhoto?.type === "video") {
+                // @ts-ignore replaceAsync exists at runtime
+                await player.replaceAsync({ uri: selectedPhoto.uri });
+                try {
+                    // @ts-ignore play exists at runtime
+                    player.play();
+                } catch {}
+            } else {
+                try {
+                    // @ts-ignore pause exists at runtime
+                    player.pause();
+                } catch {}
+            }
+        })();
+    }, [selectedPhoto]);
+
     const openPhoto = (item: PhotoItem) => {
         setSelectedPhoto(item);
     };
@@ -48,6 +69,17 @@ export default function Detail() {
         </TouchableOpacity>
     );
 
+    const deleteItem = async (uri: string) => {
+        try {
+            const filtered = capturedPhotos.filter(p => p.uri !== uri);
+            setCapturedPhotos(filtered);
+            await AsyncStorage.setItem("capturedPhotos", JSON.stringify(filtered));
+            setSelectedPhoto(null);
+        } catch (e) {
+            console.error("Failed to delete item", e);
+        }
+    };
+
     const renderFullScreenPhoto = () => (
         <Modal
             visible={selectedPhoto !== null}
@@ -58,11 +90,24 @@ export default function Detail() {
                 <TouchableOpacity style={styles.closeButton} onPress={closePhoto}>
                     <Text style={styles.closeButtonText}>x</Text>
                 </TouchableOpacity>
-                <Image
-                    source= {{uri: selectedPhoto?.uri }}
-                    style={styles.fullScreenPhoto}
-                    resizeMode='contain'
-                />
+                {selectedPhoto?.type === "video" ? (
+                    <VideoView
+                        player={player}
+                        style={styles.fullScreenPhoto}
+                        allowsFullscreen
+                        allowsPictureInPicture
+                        contentFit="contain"
+                    />
+                ) : (
+                    <Image
+                        source= {{uri: selectedPhoto?.uri }}
+                        style={styles.fullScreenPhoto}
+                        resizeMode='contain'
+                    />
+                )}
+                <TouchableOpacity style={styles.deleteButton} onPress={() => selectedPhoto && deleteItem(selectedPhoto.uri)}>
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                </TouchableOpacity>
             </SafeAreaView>
         </Modal>
     );
@@ -122,5 +167,19 @@ const styles = StyleSheet.create({
     closeButtonText: {
         color: "white",
         fontSize: 36,
+    },
+    deleteButton: {
+        position: "absolute",
+        bottom: 40,
+        alignSelf: "center",
+        backgroundColor: "#ff4444",
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    deleteButtonText: {
+        color: "white",
+        fontSize: 18,
+        fontWeight: "bold",
     },
 });
