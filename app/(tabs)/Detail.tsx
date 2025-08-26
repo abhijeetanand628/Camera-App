@@ -139,11 +139,20 @@ export default function Detail() {
         </Modal>
     );
 
+    const selectAll = () => {
+        const all = new Set(capturedPhotos.map(p => p.uri));
+        setSelectedUris(all);
+    };
+
+    const clearSelection = () => {
+        setSelectedUris(new Set());
+    };
+
     const deleteSelected = async () => {
         try {
             const remaining = capturedPhotos.filter(p => !selectedUris.has(p.uri));
             setCapturedPhotos(remaining);
-            setSelectedUris(new Set());
+            clearSelection();
             setSelectionMode(false);
             await AsyncStorage.setItem("capturedPhotos", JSON.stringify(remaining));
         } catch (e) {
@@ -157,7 +166,7 @@ export default function Detail() {
                 <TouchableOpacity style={styles.toolbarButton} onPress={() => {
                     if (selectionMode) {
                         setSelectionMode(false);
-                        setSelectedUris(new Set());
+                        clearSelection();
                     } else {
                         setSelectionMode(true);
                     }
@@ -165,9 +174,20 @@ export default function Detail() {
                     <Text style={styles.toolbarButtonText}>{selectionMode ? "Cancel" : "Select"}</Text>
                 </TouchableOpacity>
                 {selectionMode && (
-                    <TouchableOpacity style={[styles.toolbarButton, styles.deleteSelected]} onPress={deleteSelected}>
-                        <Text style={[styles.toolbarButtonText, styles.deleteSelectedText]}>Delete Selected ({selectedUris.size})</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity style={styles.toolbarButton} onPress={() => {
+                            if (selectedUris.size === capturedPhotos.length) {
+                                clearSelection();
+                            } else {
+                                selectAll();
+                            }
+                        }}>
+                            <Text style={styles.toolbarButtonText}>{selectedUris.size === capturedPhotos.length ? "Clear All" : "Select All"}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.toolbarButton, styles.deleteSelected]} onPress={deleteSelected}>
+                            <Text style={[styles.toolbarButtonText, styles.deleteSelectedText]}>Delete Selected ({selectedUris.size})</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
             </View>
             {capturedPhotos.length > 0 ? (

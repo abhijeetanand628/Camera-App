@@ -28,6 +28,7 @@ export default function CameraTab() {
     const player = useVideoPlayer({ uri: "" });
     const [isCameraReady, setIsCameraReady] = useState(false);
     const [cameraMode, setCameraMode] = useState<"picture" | "video">("picture");
+    const [resumeAfterFlip, setResumeAfterFlip] = useState(false);
     useEffect(() => {
         if (recordedUri) {
             // @ts-ignore replace is available at runtime in expo-video
@@ -87,8 +88,15 @@ export default function CameraTab() {
   };
 
     const toggleCameraFacing = useCallback(() => {
-        if (isRecording) return; // prevent flipping during recording
-        setFacing((current) => (current === "back" ? "front" : "back"));
+        const nextFacing = (prev: "back" | "front") => (prev === "back" ? "front" : "back");
+        if (isRecording) {
+            setResumeAfterFlip(true);
+            setFacing(nextFacing);
+            // stop current segment; startRecording will auto-resume when it resolves
+            try { (cameraRef.current as any)?.stopRecording?.(); } catch {}
+        } else {
+            setFacing(nextFacing);
+        }
     }, [isRecording]);
 
     const handleZoomChange = useCallback((value: number) => {
@@ -145,7 +153,15 @@ export default function CameraTab() {
         console.error("Failed to record video", err);
     } finally {
         setIsRecording(false);
-        setCameraMode("picture");
+        if (resumeAfterFlip) {
+            setResumeAfterFlip(false);
+            setCameraMode("video");
+            setIsCameraReady(false);
+            await wait(400);
+            startRecording();
+        } else {
+            setCameraMode("picture");
+        }
     }
     };
 
@@ -225,9 +241,8 @@ export default function CameraTab() {
                             <Text style={styles.buttonText}>Logout</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.button, isRecording && styles.buttonDisabled]}
+                            style={styles.button}
                             onPress={toggleCameraFacing}
-                            disabled={isRecording}
                         >
                             <Text style={styles.buttonText}>Flip</Text>
                         </TouchableOpacity>
